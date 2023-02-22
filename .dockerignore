@@ -1,0 +1,22 @@
+# Custom
+data/
+notebooks/
+tests/
+
+# VS Code & Mac
+.vscode/
+.DS_Store
+
+# Python, pyenv & Environments
+__pycache__
+.python-version
+.pytest_cache/
+.env
+
+# Git & GitHub
+LICENSE
+README.md
+.git
+.github/
+.gitignore
+.cache

@@ -1,0 +1,142 @@
+name: Start of agent training
+on:
+  workflow_dispatch:
+    inputs:
+      training_location:
+        description: Train 'local' or 'gcp'?
+        required: true
+        default: 'gcp'
+      n_envs:
+        description: Number of parallel environments?
+        required: true
+        default: '8'
+      env_kwargs:
+        description: Optional **kwargs for constructor?
+        required: true
+        default: '{}'
+      save_freq:
+        description: Model storage at each n-step?
+        required: true
+        default: '500000'
+      eval_freq:
+        description: Model evaluation at each n-step?
+        required: true
+        default: '50000'
+      total_timesteps:
+        description: Total steps to train?
+        required: true
+        default: '5000000'
+      n_steps:
+        description: Model update after each n-step?
+        required: true
+        default: '4096'
+      policy_kwargs:
+        description: Additional arguments for policy creation?
+        required: true
+        default: '{}'
+      learning_rate:
+        description: Learning rate?
+        required: true
+        default: '0.0003'
+      gamma:
+        description: Discount factor?
+        required: true
+        default: '0.99'
+
+jobs:
+  gcp:
+    # Final training should be here, but it could be expensive
+    if: ${{ github.event.inputs.training_location == 'gcp' }}
+    name: Create custom Vertex AI job
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      BUCKET_NAME: super-mario-bros
+      REGION: us-east1
+      MACHINE_TYPE: e2-standard-4
+      IMAGE_URI: us-east1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/super-mario-bros/train:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+
+      - name: Setup the Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Create Cloud Storage bucket
+        continue-on-error: true
+        run: |
+          gcloud storage buckets create "gs://$BUCKET_NAME" \
+            --location="$REGION" \
+            --public-access-prevention \
+            --uniform-bucket-level-access
+
+      - name: Create custom Vertex AI job
+        run: |
+          gcloud ai custom-jobs create \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --display-name="smb-train" \
+            --worker-pool-spec="replica-count=1,machine-type=$MACHINE_TYPE,container-image-uri=$IMAGE_URI" \
+            --args=--n_envs=${{ github.event.inputs.n_envs }} \
+            --args=^*^--env_kwargs=${{ github.event.inputs.env_kwargs }} \
+            --args=--save_freq=${{ github.event.inputs.save_freq }} \
+            --args=--eval_freq=${{ github.event.inputs.eval_freq }} \
+            --args=--total_timesteps=${{ github.event.inputs.total_timesteps }} \
+            --args=--n_steps=${{ github.event.inputs.n_steps }} \
+            --args=--policy_kwargs=${{ github.event.inputs.policy_kwargs }} \
+            --args=--learning_rate=${{ github.event.inputs.learning_rate }} \
+            --args=--gamma=${{ github.event.inputs.gamma }}
+
+  local:
+    # Training here should be short and used for testing purposes only
+    if: ${{ github.event.inputs.training_location == 'local' }}
+    name: Train locally on GitHub Action
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8.15"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create artifact folder
+        run: mkdir -p data
+
+      - name: Train locally on GitHub Action
+        run: |
+          python super_mario_bros/train.py \
+            --training_location=${{ github.event.inputs.training_location }} \
+            --artifact_folder=data \
+            --n_envs=${{ github.event.inputs.n_envs }} \
+            --env_kwargs=${{ github.event.inputs.env_kwargs }} \
+            --save_freq=${{ github.event.inputs.save_freq }} \
+            --eval_freq=${{ github.event.inputs.eval_freq }} \
+            --total_timesteps=${{ github.event.inputs.total_timesteps }} \
+            --n_steps=${{ github.event.inputs.n_steps }} \
+            --policy_kwargs=${{ github.event.inputs.policy_kwargs }} \
+            --learning_rate=${{ github.event.inputs.learning_rate }} \
+            --gamma=${{ github.event.inputs.gamma }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@main
+        with:
+          name: artifacts
+          path: data
+          retention-days: 3

@@ -1,0 +1,49 @@
+name: Build and Push Image to GCP
+on:
+  workflow_dispatch
+
+jobs:
+  build-push-gar:
+    name: Build & Push to GAR
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      REPO_NAME: super-mario-bros
+      REGION: us-east1
+      IMAGE_NAME: train
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+
+      - name: Setup the Google Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v1'
+
+      - name: Create Artifact Registry Repository
+        continue-on-error: true
+        run: |
+          gcloud artifacts repositories create "$REPO_NAME" \
+            --repository-format="docker" \
+            --location="$REGION" \
+            --description="Vertex AI training images"
+
+      - name: Build Docker Image
+        run: docker build -t "$IMAGE_NAME:latest" .
+
+      - name: Configure Docker Client
+        run: gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+
+      - name: Push Docker Image to Artifact Registry
+        run: |
+          docker tag "$IMAGE_NAME:latest" "$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:latest"
+          docker push "$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:latest"

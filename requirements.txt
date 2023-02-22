@@ -1,0 +1,12 @@
+coverage==7.0.0
+google-cloud-aiplatform==1.19.0
+google-cloud-storage==2.6.0
+gym==0.21
+gym-super-mario-bros==7.4.0
+numpy==1.24.1
+opencv-python==4.6.0.66
+pytest==7.2.0
+pytest-mock==3.10.0
+rich==12.6.0
+stable-baselines3==1.6.2
+tensorboard==2.11.0

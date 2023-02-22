@@ -1,0 +1,80 @@
+name: Unit testing & coverage
+on: [push, workflow_dispatch]
+
+jobs:
+  badge:
+    name: Create coverage.json for badge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8.15"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Set environment variables
+        run: echo "PYTHONPATH=super_mario_bros" >> "$GITHUB_ENV"
+
+      # - name: Run pytest
+      #   run: python -B -m pytest --import-mode=append tests/
+
+      - name: Create coverage.json for badge
+        run: coverage run --source=super_mario_bros -m pytest -v tests && coverage json
+
+      - name: Show files
+        run: echo ls -Alt
+
+      - name: Upload coverage.json
+        uses: actions/upload-artifact@v3
+        with:
+          name: data
+          path: coverage.json
+          retention-days: 1
+
+  coverage:
+    name: Unit testing & coverage report
+    needs: badge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8.15"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Set environment variables
+        run: echo "PYTHONPATH=super_mario_bros" >> "$GITHUB_ENV"
+
+      - name: Download coverage.json
+        uses: actions/download-artifact@v3
+        with:
+          name: data
+
+      - name: Unit testing & coverage report
+        run: |
+          coverage run --source=super_mario_bros -m pytest -v tests && coverage report
+          export "TOTAL=$(python -c "import json;print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")"
+          echo "total=$TOTAL" >> "$GITHUB_ENV"
+          echo "### Total coverage: ${TOTAL}%" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create coverage badge
+        uses: schneegans/dynamic-badges-action@v1.6.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: fe2dfc9abd874586dc86846cf0f5e1d5
+          filename: covbadge.json
+          label: Coverage
+          message: ${{ env.total }}%
+          minColorRange: 50
+          maxColorRange: 90
+          valColorRange: ${{ env.total }}
