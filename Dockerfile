@@ -1,5 +1,5 @@
 # Base Image
-FROM python:3.8-slim
+FROM python:3.13.0b3-slim
 
 # Install system dependencies 
 RUN apt-get update && \
