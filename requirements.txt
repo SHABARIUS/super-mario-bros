@@ -10,3 +10,4 @@ pytest-mock==3.10.0
 rich==12.6.0
 stable-baselines3==1.6.2
 tensorboard==2.11.0
+werkzeug>=3.0.6 # not directly required, pinned by Snyk to avoid a vulnerability
